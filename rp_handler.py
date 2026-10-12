@@ -1,11 +1,20 @@
+import os
 import re
 import runpod
 from transformers import pipeline
 
-MODEL_ID = "zai-org/GLM-5.3-Flash"
+# Model ve ayarlar Runpod endpoint'inin Environment Variables kısmından değiştirilebilir
+MODEL_ID = os.environ.get("MODEL_ID", "zai-org/GLM-5.3-Flash")
+TRUST_REMOTE_CODE = os.environ.get("TRUST_REMOTE_CODE", "true").lower() in ("1", "true", "yes")
 
 # Modeli handler dışında yüklemek önemli (her request'te yeniden yüklemesin)
-pipe = pipeline("text-generation", model=MODEL_ID, device_map="auto")
+pipe = pipeline(
+    "text-generation",
+    model=MODEL_ID,
+    device_map="auto",
+    torch_dtype="auto",
+    trust_remote_code=TRUST_REMOTE_CODE,
+)
 
 def _extract_python(code: str) -> str:
     """
@@ -39,13 +48,18 @@ def handler(job):
 
     final_prompt = f"{system_instruction}\n\nTASK:\n{prompt}\n\nPYTHON CODE:\n"
 
+    # temperature 0 ise greedy decoding (sampling 0 sıcaklıkla hata verir)
+    sample_kwargs = (
+        {"do_sample": True, "temperature": temperature, "top_p": top_p}
+        if temperature > 0
+        else {"do_sample": False}
+    )
+
     out = pipe(
         final_prompt,
         max_new_tokens=max_new_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        do_sample=True,
         return_full_text=False,
+        **sample_kwargs,
     )
 
     # transformers pipeline çıktısı liste/dict
