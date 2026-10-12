@@ -3,11 +3,11 @@ import re
 import runpod
 from transformers import pipeline
 
-# Model ve ayarlar Runpod endpoint'inin Environment Variables kısmından değiştirilebilir
+# Model and options can be overridden via the endpoint's Environment Variables
 MODEL_ID = os.environ.get("MODEL_ID", "zai-org/GLM-5.3-Flash")
 TRUST_REMOTE_CODE = os.environ.get("TRUST_REMOTE_CODE", "true").lower() in ("1", "true", "yes")
 
-# Modeli handler dışında yüklemek önemli (her request'te yeniden yüklemesin)
+# Load the model once at startup, not on every request
 pipe = pipeline(
     "text-generation",
     model=MODEL_ID,
@@ -18,7 +18,7 @@ pipe = pipeline(
 
 def _extract_python(code: str) -> str:
     """
-    Model bazen ```python ...``` döndürür; varsa fence'leri temizler.
+    Strip ```python ...``` fences if the model returns them.
     """
     if code is None:
         return ""
@@ -31,12 +31,12 @@ def _extract_python(code: str) -> str:
     return code
 
 def handler(job):
-    job_input = job.get("input", {})  # Runpod job formatı
+    job_input = job.get("input", {})  # Runpod job format
     prompt = job_input.get("prompt", "")
     filename = job_input.get("filename", "solution.py")
     gen = job_input.get("generation", {}) or {}
 
-    # generation parametreleri (defaultlar)
+    # generation parameters (defaults)
     max_new_tokens = int(gen.get("max_new_tokens", 800))
     temperature = float(gen.get("temperature", 0.2))
     top_p = float(gen.get("top_p", 0.9))
@@ -48,7 +48,7 @@ def handler(job):
 
     final_prompt = f"{system_instruction}\n\nTASK:\n{prompt}\n\nPYTHON CODE:\n"
 
-    # temperature 0 ise greedy decoding (sampling 0 sıcaklıkla hata verir)
+    # temperature 0 -> greedy decoding (sampling with temperature 0 raises an error)
     sample_kwargs = (
         {"do_sample": True, "temperature": temperature, "top_p": top_p}
         if temperature > 0
@@ -62,7 +62,7 @@ def handler(job):
         **sample_kwargs,
     )
 
-    # transformers pipeline çıktısı liste/dict
+    # transformers pipeline output is a list of dicts
     text = out[0]["generated_text"] if out and isinstance(out, list) else str(out)
     py = _extract_python(text)
 
