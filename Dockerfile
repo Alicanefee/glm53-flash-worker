@@ -8,6 +8,9 @@ WORKDIR /app
 ENV HF_HOME=/runpod-volume/huggingface-cache \
     PYTHONUNBUFFERED=1
 
+# git is needed to pip-install transformers from GitHub
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -U -r /app/requirements.txt
 

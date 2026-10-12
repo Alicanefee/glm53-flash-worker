@@ -1,5 +1,5 @@
 runpod
-transformers
+git+https://github.com/huggingface/transformers.git
 accelerate
 safetensors
 huggingface_hub
